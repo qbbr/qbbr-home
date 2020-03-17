@@ -1,0 +1,205 @@
+homeassistant:
+  name: qbbr-home
+  unit_system: metric
+  time_zone: Asia/Irkutsk
+  customize: !include customize.yaml
+
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+# Uncomment this if you are using SSL/TLS, running in Docker container, etc.
+http:
+  ssl_certificate: /root/fullchain.pem
+  ssl_key: /root/private.pem
+  login_attempts_threshold: 5
+
+google_assistant:
+  project_id: qbbr-home
+  service_account: !include qbbr-sf-test-a8b48c7d8d91.json
+  report_state: true
+  exposed_domains:
+    - switch
+    - light
+    - climate
+    - media_player
+    - sensor
+  entity_config:
+    media_player.mpd:
+      aliases:
+        - музяку
+    switch.philips_tv:
+      aliases:
+        - зомбоящик
+    switch.qbbr_esp01s_1_relay:
+      aliases:
+        - розетку 1
+    switch.qbbr_esp01s_1_relay_2:
+      aliases:
+        - розетку 2
+
+# dialogflow:
+#   intent_script:
+#     GetHumidity:
+#       speech:
+#         text: Влажность дома {{ states('sensor.qbbr_nodemcu_2_humidity') }} процентов
+
+# for dialogflow
+intent_script:
+  GetHumidity:
+    speech:
+      text: Влажность дома {{ states('sensor.qbbr_nodemcu_2_humidity') }} процентов
+  GetTemperature:
+    speech:
+      text: Температура дома {{ states('sensor.qbbr_nodemcu_2_temperature') }} градусов по цельсию
+
+  GetPhilipsTvState:
+    speech:
+      text: Ваш телевизор {% if is_state('switch.philips_tv', 'off') %}выключен{% else %}включён{% endif %}
+  OnPhilipsTv:
+    speech:
+      text: Включаю телик
+    action:
+      - service: homeassistant.turn_on
+        data_template:
+          entity_id: switch.philips_tv
+  OffPhilipsTv:
+    speech:
+      text: Выключаю телик
+    action:
+      - service: homeassistant.turn_off
+        data_template:
+          entity_id: switch.philips_tv
+
+  GetMpdTrack:
+    speech:
+      text: >-
+        {% if not is_state('media_player.mpd', 'off') %}
+          Сейчас играет:
+          {% if state_attr('media_player.mpd', 'media_artist') != 'None'%}
+            {{ state_attr('media_player.mpd', 'media_artist') }}
+          {% endif %}
+          {% if state_attr('media_player.mpd', 'media_title') != 'None' %}
+            {{ state_attr('media_player.mpd', 'media_title') }}
+          {% endif %}
+        {% else %}
+          Ничего не играет
+        {% endif %}
+  StopMpdTrack:
+    speech:
+      text: Выключаю музыку
+    action:
+      - service: media_player.turn_off
+        entity_id: media_player.mpd
+  PlayMpdTrack:
+    speech:
+      text: Включаю музыку
+    action:
+      - service: media_player.turn_on
+        entity_id: media_player.mpd
+  PauseMpdTrack:
+    speech:
+      text: Ставлю на паузу музыку
+    action:
+      - service: media_player.media_pause
+        data_template:
+          entity_id: media_player.mpd
+  NextMpdTrack:
+    speech:
+      text: Включаю следующую песню
+    action:
+      - service: media_player.media_next_track
+        data_template:
+          entity_id: media_player.mpd
+  PrevMpdTrack:
+    speech:
+      text: Включаю предыдущую песню
+    action:
+      - service: media_player.media_previous_track
+        data_template:
+          entity_id: media_player.mpd
+  VolumeUpMpd:
+    speech:
+      text: Ок, делаю громче
+    action:
+      - service: media_player.volume_up
+        data_template:
+          entity_id: media_player.mpd
+  VolumeDownMpd:
+    speech:
+      text: Ок, делаю тише
+    action:
+      - service: media_player.volume_down
+        data_template:
+          entity_id: media_player.mpd
+
+  LightOn:
+    speech:
+      text: Включаю свет
+    action:
+      - service: light.turn_on
+        data_template:
+          entity_id: light.svet_v_gostinoi
+  LightOff:
+    speech:
+      text: Выключаю свет
+    action:
+      - service: light.turn_off
+        data_template:
+          entity_id: light.svet_v_gostinoi
+
+climate:
+  - platform: generic_thermostat
+    target_sensor: sensor.qbbr_nodemcu_2_temperature
+    heater: switch.fake_switch
+
+device_tracker:
+  - platform: nmap_tracker
+    hosts:
+      - 192.168.0.100 # oneplus for test
+
+media_player:
+  - platform: mpd
+    name: MPD
+    host: 192.168.0.102
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+#shell_command:
+#  tv_on: /bin/echo on 0 | /usr/bin/cec-client -s -d 1
+#  tv_off: /bin/echo standby 0 | /usr/bin/cec-client -s -d 1
+
+switch:
+  - platform: command_line
+    scan_interval: 180 # 3min
+    switches:
+      philips_tv:
+        friendly_name: "Philips TV"
+        command_on: "echo on 0 | cec-client -s -d 1"
+        command_off: "echo standby 0 | cec-client -s -d 1"
+        command_state: "echo pow 0 | cec-client -s -d 1 | grep 'power status'"
+        value_template: '{{ value == "power status: on" }}'
+
+light:
+  - platform: switch
+    name: Свет 1
+    entity_id: switch.qbbr_nodemcu_1_relay_1
+  - platform: switch
+    name: Свет 2
+    entity_id: switch.qbbr_nodemcu_1_relay_2
+  - platform: group
+    name: Свет в гостиной
+    entities:
+     - light.svet_1
+     - light.svet_2
+
+sensor:
+  - platform: time_date
+    display_options:
+      - 'date_time'
+
+group: !include groups.yaml
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

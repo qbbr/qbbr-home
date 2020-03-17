@@ -1,0 +1,5 @@
+switch.philips_tv:
+  icon: mdi:television
+
+person.sokolov_innokenty:
+  entity_picture: http://gravatar.com/avatar/45156cc8704a875ce588e213c59293b0
